@@ -1,0 +1,95 @@
+import pandas as pd
+import numpy as np
+import yfinance as yf
+import matplotlib.pyplot as plt
+import os
+
+def data_loader(ticker, start='2020-01-01'):
+    df = yf.download(ticker, start=start, auto_adjust = True)
+
+    # handles case of multiindex columns, flattens.
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    df = df[['Close']].copy()
+    df.rename(columns={'Close': 'price'}, inplace=True)
+
+    return df
+
+# Given signal strategy
+def trade_signal(df):
+    sim_df = df.copy()
+
+    sim_df['ma50'] = sim_df['price'].rolling(50).mean()
+    sim_df['signal'] = 0
+    sim_df.loc[sim_df['price'] > sim_df ['ma50'], 'signal'] = 1
+    return sim_df
+
+# Backtesting Engine
+
+def backtestEngine(df):
+    sim_df = df.copy()
+    sim_df['returns'] = sim_df['price'].pct_change()
+    sim_df['strategy_returns'] = sim_df['signal'].shift(1) * sim_df ['returns']
+
+    sim_df['equity'] = (1 + sim_df['strategy_returns']).cumprod()
+    sim_df['buy_hold'] = (1 + sim_df['returns']).cumprod()
+
+
+    return sim_df.dropna()
+
+
+#generating key performance metrics/ KPI's
+def key_performance_metrics(df):
+    total_return = df['equity'].iloc[-1] - 1
+    annualized_return = (1 + total_return) ** (252 / len(df)) - 1
+
+    sharpe = np.sqrt(252) * ( df['strategy_returns'].mean() / df['strategy_returns'].std())
+    rolling_max = df['equity'].cummax()
+    drawdown = df['equity'] / rolling_max - 1
+    max_drawdown = drawdown.min()
+
+    # returns some basic key stats:
+    # From my understanding so far; strategy should aim to raise sharpe ratio without compromising value of annualized return. 
+    return {
+        "Total Return (%)": round(total_return * 100, 2),
+        "Annualized_Return (%)": round (annualized_return * 100 , 2),
+        "Sharpe Ratio": round(sharpe, 2),
+        "Max Drawdown (%)": round(max_drawdown * 100, 2),
+                }
+
+# Plotting strategy against buy & hold 
+def plot_results(df, ticker):
+    plt.figure(figsize=(10,5))
+    plt.title(f"Equity Curve: {ticker}")
+    plt.xlabel("Date (Year)")
+    plt.ylabel("Equity (Normalized, Beginning at 1.0)") # Essentially the culmulative return
+    plt.plot(df.index, df['equity'], label="Strategy")
+    plt.plot(df.index, df['buy_hold'], label="Buy & Hold")
+    plt.legend(frameon = True)
+
+    convpath = os.path.dirname(os.path.abspath(__file__))
+    savefig = os.path.join(convpath, "strategy_equity_curve.png")
+
+    plt.savefig(savefig)
+    plt.show()
+
+
+def main():
+    ticker = "NVDA"
+
+    df = data_loader(ticker)
+    df = trade_signal(df)
+    df = backtestEngine(df)
+
+    metrics = key_performance_metrics(df)
+    for k, v in metrics.items(): 
+        print(f"{k}: {v}")
+
+
+    plot_results(df, ticker)
+
+if __name__ == "__main__":
+            main()
+
+
