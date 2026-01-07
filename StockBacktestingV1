@@ -4,6 +4,7 @@ import yfinance as yf
 import matplotlib.pyplot as plt
 import os
 
+# Loads data through pandas, handles price adjustment
 def data_loader(ticker, start='2020-01-01'):
     df = yf.download(ticker, start=start, auto_adjust = True)
 
@@ -25,7 +26,7 @@ def trade_signal(df):
     sim_df.loc[sim_df['price'] > sim_df ['ma50'], 'signal'] = 1
     return sim_df
 
-# Backtesting Engine
+# Backtesting engine
 
 def backtestEngine(df):
     sim_df = df.copy()
@@ -39,7 +40,7 @@ def backtestEngine(df):
     return sim_df.dropna()
 
 
-#generating key performance metrics/ KPI's
+# Generating key performance metrics/ KPI's
 def key_performance_metrics(df):
     total_return = df['equity'].iloc[-1] - 1
     annualized_return = (1 + total_return) ** (252 / len(df)) - 1
